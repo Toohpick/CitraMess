@@ -399,11 +399,19 @@ std::string GetTitleContentPath(Service::FS::MediaType media_type, u64 tid, u16 
     u32 content_id = 0;
     FileSys::TitleMetadata tmd;
     if (tmd.Load(tmd_path) == Loader::ResultStatus::Success) {
+<<<<<<< HEAD
         if(contentIndex && tmd.ContentIndexExists(index)) {
             index = tmd.ContentIndexToIndex(index);
         }
 
         content_id = tmd.GetContentIDByIndex(index);
+=======
+        if(index < tmd.GetContentCount()) {
+            content_id = tmd.GetContentIDByIndex(index);
+        } else {
+            LOG_ERROR(Service_AM, "Attempted to get path for non-existent content index {:04x}.", index);
+        }
+>>>>>>> ba350794492bbe2db6486a06e3d2d51a5a2de56a
 
         // TODO(shinyquagsire23): how does DLC actually get this folder on hardware?
         // For now, check if the second (index 1) content has the optional flag set, for most
@@ -529,7 +537,10 @@ void Module::Interface::FindDLCContentInfos(Kernel::HLERequestContext& ctx) {
             std::shared_ptr<FileUtil::IOFile> romfs_file;
             u64 romfs_offset = 0;
 
-            if (!tmd.ContentIndexExists(content_requested[i])) {
+
+            if (content_requested[i] >= tmd.GetContentCount()) {
+                LOG_ERROR(Service_AM, "Attempted to get info for non-existent content index {:04x}.", content_requested[i]);
+
                 IPC::RequestBuilder rb = rp.MakeBuilder(1, 4);
                 rb.Push<u32>(-1); // TODO: Find the right error code
                 rb.PushMappedBuffer(content_requested_in);
@@ -537,16 +548,14 @@ void Module::Interface::FindDLCContentInfos(Kernel::HLERequestContext& ctx) {
                 return;
             }
 
-            u16 index = tmd.ContentIndexToIndex(content_requested[i]);
-
             ContentInfo content_info = {};
-            content_info.index = static_cast<u16>(i);
-            content_info.type = tmd.GetContentTypeByIndex(index);
-            content_info.content_id = tmd.GetContentIDByIndex(index);
-            content_info.size = tmd.GetContentSizeByIndex(index);
+            content_info.index = content_requested[i];
+            content_info.type = tmd.GetContentTypeByIndex(content_requested[i]);
+            content_info.content_id = tmd.GetContentIDByIndex(content_requested[i]);
+            content_info.size = tmd.GetContentSizeByIndex(content_requested[i]);
             content_info.ownership = OWNERSHIP_OWNED; // TODO: Pull this from the ticket.
 
-            if (FileUtil::Exists(GetTitleContentPath(media_type, title_id, index))) {
+            if (FileUtil::Exists(GetTitleContentPath(media_type, title_id, content_requested[i]))) {
                 content_info.ownership |= OWNERSHIP_DOWNLOADED;
             }
 
@@ -589,7 +598,7 @@ void Module::Interface::ListDLCContentInfos(Kernel::HLERequestContext& ctx) {
     if (tmd.Load(tmd_path) == Loader::ResultStatus::Success) {
         copied = std::min(content_count, static_cast<u32>(tmd.GetContentCount()));
         std::size_t write_offset = 0;
-        for (u32 i = start_index; i < copied; i++) {
+        for (u32 i = start_index; i < start_index + copied; i++) {
             std::shared_ptr<FileUtil::IOFile> romfs_file;
             u64 romfs_offset = 0;
 
